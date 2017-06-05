@@ -34,6 +34,13 @@ int main()
 
   PID pid;
   // TODO: Initialize the pid variable.
+  pid.Init(0.1, 0.01, 4.96);
+  
+  static int steps = 0;
+  static int reset_count = 0;
+  static int case_count = 0;
+  static double throttle_value = 0.5;
+  static double max_cte = 4;
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -51,6 +58,8 @@ int main()
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
+          double mean_sq_error;
+          
           /*
           * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
@@ -58,14 +67,101 @@ int main()
           * another PID controller to control the speed!
           */
           
+          steps += 1;
+          
+          // implement twiddle to tune parameters
+          // if cross tracking error is too big
+          // -> modify the coefficients
+          // -> reset the simulator
+          if(fabs(cte) > max_cte){
+            
+            mean_sq_error = pid.sq_error / steps ;
+            
+            // if after first round
+            if(reset_count == 0){
+              pid.best_sq_error = mean_sq_error;
+            }
+            
+            if(mean_sq_error < pid.best_sq_error){
+              pid.best_sq_error = mean_sq_error;
+              // update dp
+              if ((case_count == 0) || (case_count == 1) || (case_count == 2)) pid.dp *= 1.1;
+              // update di
+              if ((case_count == 3) || (case_count == 4) || (case_count == 5)) pid.di *= 1.1;
+              // update dd
+              if ((case_count == 6) || (case_count == 7) || (case_count == 8)) pid.dd *= 1.1;
+            }
+            else{
+              // update Kp
+              if(case_count == 0){
+                pid.Kp += pid.dp;
+              }
+              if (case_count == 1) {
+                pid.Kp -= 2 * pid.dp;
+              }
+              if (case_count == 2) {
+                pid.Kp += pid.dp;
+                pid.dp *= 0.9;
+              }
+              // update Ki
+              if(case_count == 3){
+                pid.Ki += pid.di;
+              }
+              if (case_count == 4) {
+                pid.Ki -= 2 * pid.di;
+              }
+              if (case_count == 5) {
+                pid.Ki += pid.di;
+                pid.di *= 0.9;
+              }
+              // update Kd
+              if(case_count == 6){
+                pid.Kd += pid.dd;
+              }
+              if (case_count == 7) {
+                pid.Kd -= 2 * pid.dd;
+              }
+              if (case_count == 8) {
+                pid.Kd += pid.dd;
+                pid.dd *= 0.9;
+              }
+              // update case counter
+              case_count += 1;
+              if(case_count % 9 == 0) case_count = 0;
+            }
+            
+            // reset the simulator
+            reset_count += 1;
+            steps = 0;
+            std::string msg = "42[\"reset\",{}]";
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          }
+          
+          pid.UpdateError(cte);
+          steer_value = - pid.TotalError();
+          
+          // limit the steering angle
+          if (steer_value < -1) steer_value = -1;
+          if (steer_value > 1) steer_value = 1;
+          
+          // update the throttle according to steering angle and speed
+          if (fabs(steer_value) > 0.5){
+            throttle_value = 0.5 * (1 - 0.8 * fabs(steer_value)) ;
+            if (speed >= 30) throttle_value = 0;
+          }
+          if (fabs(steer_value) < 0.2){
+            throttle_value = 1 - fabs(steer_value);
+            if(speed >= 50) throttle_value = 0.5;
+          }
+
           // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          std::cout << "CTE: " << cte << " Kp: " << pid.Kp << " Ki: " << pid.Ki << " Kd: " << pid.Kd << " Steering : " << steer_value << " Throttle: " << throttle_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = throttle_value;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {

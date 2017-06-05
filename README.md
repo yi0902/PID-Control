@@ -3,6 +3,31 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## PID Control
+
+PID control is a technique to generate a control output to steer the vehicle closer to its desired positions. In this project, it takes as input an error signal which is the difference between the actual car position on the road and the desired trajectory, known as cross-track error (cte). The goal is to design a PID controller that minimizes the distance to the desired car trajectory by finding the corresponding coefficients of controller's P, I, and D components. Here the primary control output of the PID controller is the steering angle.
+
+**P - proportional gain**
+
+The proportional component computes an output proportional to the cross-track error. A pure P - controller is unstable and at best oscillates about the desired trajectory. The proportional gain contributes a control output to the steering angle of the form - Kp * cte with a positive constant Kp.
+
+**D - differential gain**
+
+The differential component computes an output proportional to the derivative of the cross-track error. It's used to mitigate the oscillations caused by the pure P-control. The differential gain contributes a control output of the form - Kd * d(cte)/dt, with a positive constant Kd.
+
+**I - integral gain**
+
+The integral component computes an output which simply sums up the cross-track error over time. The corresponding contribution to the steering angle is given by - Ki * sum(cte), with a positive constant Ki. It's ofen used to correct the systematic bias, eg. the no-parallelism of wheels. 
+
+## Hyperparameter Tuning
+
+To find the optimal paramters for PID controller, I combined manual tuning and Twiddle tuning. 
+I first manually tried several paramters and find my initial parameters. These parameters were pretty stable as slightly wrong parameters lead quickly to crashes of the car. I then fine-tuned paramters by implementing the Twiddle algorithm. When the car went out of the road or the cross tracking error was bigger than a limit, twiddle would modify parameters and then a reset signal was sent to restart the simulator.
+
+Here the link to a [video record](https://www.youtube.com/watch?v=gOAXaZC6f18)
+
+However, I noted a randomness in the success of driving through multiple rounds of track. With the same parameters, the car could sometimes succeed in driving through 3 or more rounds, sometimes 1-2 rounds and even few times couldn't pass the first round of track.
+
 ## Dependencies
 
 * cmake >= 3.5
